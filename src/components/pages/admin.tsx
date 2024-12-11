@@ -1,4 +1,4 @@
-import { Bell, CalendarDays, ClipboardCheck, Clock, Eye, Menu, Settings, Star, UserRound } from "lucide-react";
+import { Bell, CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Clock, Eye, Menu, Settings, Star, UserRound } from "lucide-react";
 import Navbar from "../custom/navbar";
 import { Button } from "../ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
@@ -11,6 +11,9 @@ import { createTask, fetchTasks, removeTask } from "@/redux/taskSlice";
 import { AppDispatch, RootState } from "@/redux/store";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "../ui/sheet";
 import { addNotification, removeNotification } from "@/redux/notificationSlice";
+import { useToast } from "@/hooks/use-toast";
+import { Toaster } from "../ui/toaster";
+import { LoadingSpinner } from "@/utils/spinner";
 
 interface Employee {
     id: number;
@@ -48,6 +51,19 @@ interface Employee {
     numberOfRatings: number;
 }
 
+interface Task {
+    id: number,
+    title: string,
+    description: string,
+    date: string,
+    duration: number,
+    appraisalStatus: string,
+    projectId: number,
+    projectName: string,
+    ratings: number,
+    numberOfRatings: number
+}
+
 // Function to format the date into the desired format
 const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -66,6 +82,31 @@ export default function Admin() {
     const [employeeLoader, setEmployeeLoader] = useState<boolean>(false);
     const tasks = useSelector((state: RootState) => state.task.tasks);
     const dispatch: AppDispatch = useDispatch();
+    const { toast } = useToast();
+    const [loading, setLoading] = useState(false);
+    const [activeTaskId, setActiveTaskId] = useState(-1);
+
+    // State for pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const tasksPerPage = 5; // Adjust the number of tasks per page here
+
+    // Filter tasks based on appraisal status
+    const filteredTasks = tasks?.filter(t => t.appraisalStatus === "APPLIED_FOR_APPRAISAL");
+
+    // Paginate tasks
+    const indexOfLastTask = currentPage * tasksPerPage;
+    const indexOfFirstTask = indexOfLastTask - tasksPerPage;
+    const currentTasks = filteredTasks.slice(indexOfFirstTask, indexOfLastTask);
+
+    // Calculate total number of pages
+    const totalPages = Math.ceil(filteredTasks.length / tasksPerPage);
+
+    // Handle page change
+    const handlePageChange = (page: number) => {
+        if (page > 0 && page <= totalPages) {
+            setCurrentPage(page);
+        }
+    };
 
     useEffect(() => {
         // Set up the SSE connection
@@ -133,8 +174,28 @@ export default function Admin() {
         setActiveId(Number(employeeId));
     };
 
-    const handleNotificationButton = (event: React.MouseEvent) => {
+    const handleNotificationButton = async (event: React.MouseEvent, task: Task) => {
         event.stopPropagation();
+        try {
+            setLoading(true);
+            setActiveTaskId(task.id);
+            const response = await fetchWithAuth(`http://localhost:8080/api/v1/notifications/remind/${ task.id }`, {
+                method: "POST"
+            });
+
+            if(response.ok) {
+                toast({
+                    title: "Notification sent to the manager"
+                });
+            }
+        }
+        catch(error) {
+            console.log(error);
+        }
+        finally {
+            setLoading(false);
+            setActiveTaskId(-1);
+        }
     }
 
     const handleUserDetails = () => {
@@ -150,6 +211,7 @@ export default function Admin() {
     return (
         <div>
             <Navbar />
+            <Toaster />
             {employeeLoader ? (
                 <div>Loading...</div>
             ) : (
@@ -307,43 +369,75 @@ export default function Admin() {
                                 <div>
                                     <p className="font-bold">Employee Tasks</p>
                                     {
-                                        tasks && tasks.filter(t => t.appraisalStatus == "APPLIED_FOR_APPRAISAL").length > 0 ?
+                                        filteredTasks && filteredTasks.length > 0 ?
                                         <Fragment>
                                             <Accordion type="multiple" className="w-full">
-                                                {
-                                                    tasks.filter(task => task.appraisalStatus == "APPLIED_FOR_APPRAISAL").map((task) => (
-                                                        <AccordionItem key={task.id} value={`item-${task.id}`}>
-                                                            <AccordionTrigger className="relative">
-                                                                <div className="flex justify-between w-full px-2 sm:px-10">
-                                                                    <div className="flex flex-col items-start gap-2">
-                                                                        <Badge>{task.projectName}</Badge>
-                                                                        <div className="flex items-center gap-2">
-                                                                            {
-                                                                                task.numberOfRatings == 0 && <Button className="absolute" size="sm" variant="outline" onClick={ event => handleNotificationButton(event) }><Bell /></Button>
-                                                                            }
-                                                                            <p className="text-lg ml-12">{task.title}</p>
+                                                <Fragment>
+                                                    <Accordion type="multiple" className="w-full">
+                                                        {currentTasks.map((task) => (
+                                                            <AccordionItem key={task.id} value={`item-${task.id}`}>
+                                                                <AccordionTrigger className="relative">
+                                                                    <div className="flex justify-between w-full px-2 sm:px-10">
+                                                                        <div className="flex flex-col items-start gap-2">
+                                                                            <Badge>{task.projectName}</Badge>
+                                                                            <div className="flex items-center gap-2">
+                                                                                {task.numberOfRatings === 0 && (
+                                                                                    <Button
+                                                                                        className="absolute"
+                                                                                        size="sm"
+                                                                                        variant="outline"
+                                                                                        onClick={(event) => handleNotificationButton(event, task)}
+                                                                                    >
+                                                                                        {activeTaskId === task.id && loading ? (
+                                                                                            <LoadingSpinner />
+                                                                                        ) : (
+                                                                                            <Bell />
+                                                                                        )}
+                                                                                    </Button>
+                                                                                )}
+                                                                                <p className="text-lg ml-12">{task.title}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex flex-col items-end justify-end gap-1 font-bold">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <CalendarDays size={16} />
+                                                                                <p>{formatDate(task.date)}</p>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <Clock size={16} />
+                                                                                <p>{task.duration} minutes</p>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
-                                                                    <div className="flex flex-col items-end justify-end gap-1 font-bold">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <CalendarDays size={16} />
-                                                                            <p>{formatDate(task.date)}</p>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <Clock size={16} />
-                                                                            <p>{task.duration} minutes</p>
-                                                                        </div>
+                                                                </AccordionTrigger>
+                                                                <AccordionContent>
+                                                                    <div className="flex flex-col gap-4 px-2 sm:px-10">
+                                                                        {task.description}
                                                                     </div>
-                                                                </div>
-                                                            </AccordionTrigger>
-                                                            <AccordionContent>
-                                                                <div className="flex flex-col gap-4 px-2 sm:px-10">
-                                                                    {task.description}
-                                                                </div>
-                                                            </AccordionContent>
-                                                        </AccordionItem>
-                                                    )).sort((a, b) => -1)
-                                                }
+                                                                </AccordionContent>
+                                                            </AccordionItem>
+                                                        ))}
+                                                    </Accordion>
+                            
+                                                    {/* Pagination Controls */}
+                                                    <div className="flex justify-center items-center mt-4">
+                                                        <Button
+                                                            onClick={() => handlePageChange(currentPage - 1)}
+                                                            disabled={currentPage === 1}
+                                                            size="sm"
+                                                        >
+                                                            <ChevronLeft />
+                                                        </Button>
+                                                        <span className="px-4 py-2">Page {currentPage} of {totalPages}</span>
+                                                        <Button
+                                                            onClick={() => handlePageChange(currentPage + 1)}
+                                                            disabled={currentPage === totalPages}
+                                                            size="sm"
+                                                        >
+                                                            <ChevronRight />
+                                                        </Button>
+                                                    </div>
+                                                </Fragment>
                                             </Accordion>
                                         </Fragment>
                                         :

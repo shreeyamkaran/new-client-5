@@ -1,4 +1,4 @@
-import { CalendarDays, CircleCheckBig, Clock, Menu, Settings, Star } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, CircleCheckBig, Clock, Menu, Settings, Star } from "lucide-react";
 import Navbar from "../custom/navbar";
 import { Button } from "../ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
@@ -46,6 +46,28 @@ export default function Manage() {
     const employeeLoading = useSelector((state: RootState) => state.employee.loading);
     const employeeSkillsAndRatings = useSelector((state: RootState) => state.employee.skillsAndRatings);
     const skillsRatedByManager = useSelector((state: RootState) => state.manager.skillsRatedByManager);
+
+    // State for pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const tasksPerPage = 5; // Adjust the number of tasks per page here
+
+    // Filter tasks based on appraisal status
+    const filteredTasks = tasks.filter(task => task.projectId == currentProject?.id && task.appraisalStatus == "APPLIED_FOR_APPRAISAL");
+
+    // Paginate tasks
+    const indexOfLastTask = currentPage * tasksPerPage;
+    const indexOfFirstTask = indexOfLastTask - tasksPerPage;
+    const currentTasks = filteredTasks.slice(indexOfFirstTask, indexOfLastTask);
+
+    // Calculate total number of pages
+    const totalPages = Math.ceil(filteredTasks.length / tasksPerPage);
+
+    // Handle page change
+    const handlePageChange = (page: number) => {
+        if (page > 0 && page <= totalPages) {
+            setCurrentPage(page);
+        }
+    };
 
 
     useEffect(() => {
@@ -215,8 +237,6 @@ export default function Manage() {
             </Fragment>
         );
     }
-
-    const filteredTasks = tasks.filter(task => task.projectId == currentProject?.id && task.appraisalStatus == "APPLIED_FOR_APPRAISAL");
 
     return (
         <div>
@@ -388,13 +408,13 @@ export default function Manage() {
                                                 </Table>
                                             </div>
                                         ) : (
-                                            filteredTasks.length > 0 ?
+                                            currentTasks.length > 0 ?
                                             <div>
                                                 <p className="font-bold">Employee Tasks</p>
                                                 <div>
                                                     <Accordion type="multiple" className="w-full">
                                                         {
-                                                            filteredTasks.map((object, index) => {
+                                                            currentTasks.map((object, index) => {
                                                                 return (
                                                                     <AccordionItem key={ index } value={ `item-${ index + 1 }` }>
                                                                         <AccordionTrigger>
@@ -429,9 +449,28 @@ export default function Manage() {
                                                                         </AccordionContent>
                                                                     </AccordionItem>
                                                                 );
-                                                            }).sort((a, b) => -1)
+                                                            })
                                                         }
                                                     </Accordion>
+                                                </div>
+
+                                                {/* Pagination Controls */}
+                                                <div className="flex justify-center items-center mt-4">
+                                                    <Button
+                                                        onClick={() => handlePageChange(currentPage - 1)}
+                                                        disabled={currentPage === 1}
+                                                        size="sm"
+                                                    >
+                                                        <ChevronLeft />
+                                                    </Button>
+                                                    <span className="px-4 py-2">Page {currentPage} of {totalPages}</span>
+                                                    <Button
+                                                        onClick={() => handlePageChange(currentPage + 1)}
+                                                        disabled={currentPage === totalPages}
+                                                        size="sm"
+                                                    >
+                                                        <ChevronRight />
+                                                    </Button>
                                                 </div>
                                             </div>
                                             :
