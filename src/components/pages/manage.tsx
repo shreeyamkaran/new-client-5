@@ -57,7 +57,10 @@ export default function Manage() {
     // Paginate tasks
     const indexOfLastTask = currentPage * tasksPerPage;
     const indexOfFirstTask = indexOfLastTask - tasksPerPage;
-    const currentTasks = filteredTasks.slice(indexOfFirstTask, indexOfLastTask);
+    const currentTasks = tasks
+        .slice()
+        .sort((a, b) => b.id - a.id) // Sort by taskId in descending order
+        .slice(indexOfFirstTask, indexOfLastTask);
 
     // Calculate total number of pages
     const totalPages = Math.ceil(filteredTasks.length / tasksPerPage);
